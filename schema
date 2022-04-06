@@ -1,0 +1,121 @@
+Create Table users(
+  user_id int,
+  password varchar(50) NOT NULL,
+  name varchar(50),
+  phone_number char(50),
+  email varchar(50),
+  PRIMARY KEY(user_id)
+)
+
+Create Table user_address( 
+  address_id int,
+  user_id int NOT NULL,
+  address_line1 varchar(50),
+  address_line2 varchar(50),
+  city varchar(50),
+  state varchar(50),
+  postcode int,
+  phone_number char(50),
+  PRIMARY KEY(address_id),
+  FOREIGN KEY (user_id) references users(user_id) ON DELETE CASCADE
+)
+
+Create Table user_payment(
+    payment_id int,
+    user_id int NOT NULL,
+    card_number numeric NOT NULL,
+    expiration_date varchar(50) NOT NULL,
+    PRIMARY KEY(payment_id),
+    FOREIGN KEY (user_id) references users(user_id) ON DELETE CASCADE,
+    CHECK (NOT (CAST(LEFT(expiration_date,2) AS INTEGER)<4 AND CAST(RIGHT(expiration_date,2) AS INTEGER)=22)),
+    CHECK (NOT(CAST(RIGHT(expiration_date,2) AS INTEGER)<22))
+  )
+
+Create Table product(
+  product_id int,
+  product_name varchar(50),
+  inventory int,
+  unit_price int,
+  PRIMARY KEY(product_id)
+)
+
+Create Table category(
+  category_id int,
+  category_name varchar(50) UNIQUE,
+  PRIMARY KEY(category_id)
+)
+
+Create Table shopping_cart(
+  sc_id int,
+  user_id int NOT NULL,
+  total int,
+  ordered char NOT NULL,
+  PRIMARY KEY(sc_id),
+  FOREIGN KEY (user_id) references user ON DELETE CASCADE
+)
+
+Create Table order_detail(
+  od_id int,
+  sc_id int NOT NULL, 
+  user_id int NOT NULL,
+  address_id int NOT NULL,
+  payment_id int NOT NULL,
+  created_time date,
+  total int,
+  PRIMARY KEY(od_id),
+  FOREIGN KEY (user_id) references user ON DELETE NO ACTION,
+  FOREIGN KEY (address_id) references user_address ON DELETE NO ACTION,
+  FOREIGN KEY (payment_id) references user_payment ON DELETE NO ACTION,
+  FOREIGN KEY (sc_id) references shopping_cart ON DELETE NO ACTION
+  )
+
+//product-category relationship
+Create Table belong_to(
+  product_id int  NOT NULL,   
+  category_id int NOT NULL, 
+  PRIMARY KEY(product_id,category_id),
+  FOREIGN KEY (product_id) references product,
+  FOREIGN KEY (category_id) references category
+)
+CREATE FUNCTION belongto(productid integer,OUT result INTEGER) AS
+$BODY$
+ BEGIN
+		IF NOT EXISTS (Select belong_to.product_id From belong_to WHERE belong_to.product_id != productid)  THEN 
+			result:= 1;
+        ELSE
+			result:= 0;
+		END IF;
+		RETURN;
+ END
+$BODY$ language plpgsql;
+ALTER TABLE belong_to
+	ADD CONSTRAINT product_category
+    CHECK (belongto(product.product_id) = 1)
+
+
+//shopping_cart-product relationship
+Create Table shop_from(
+  product_id int,
+  sc_id int NOT NULL,
+  quantity int NOT NULL,
+  total int,
+  PRIMARY KEY(product_id,sc_id),
+  FOREIGN KEY (product_id) references product,
+  FOREIGN KEY (sc_id) references shopping_cart
+)
+CREATE FUNCTION myfunc(quant integer,productid integer,OUT result INTEGER) AS
+$BODY$
+ BEGIN
+		IF quant<(Select product.inventory From product WHERE product.product_id =productid) THEN 
+			result:= 1;
+        ELSE
+			result:= 0;
+		END IF;
+		RETURN;
+ END
+$BODY$ language plpgsql;
+
+ALTER TABLE shop_from
+	ADD CONSTRAINT quantity_inventory
+    CHECK (myfunc(shop_from.quantity,shop_from.product_id) = 1)
+
